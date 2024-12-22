@@ -1,0 +1,111 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "networkInterfaceType": {
+            "type": "string",
+            "allowedValues": [
+                "Public",
+                "Private"
+            ],
+            "defaultValue": "Public",
+            "metadata": {
+                "description": "The type of network interface to create."
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location for all resources."
+            }
+        }
+    },
+    "functions": [],
+    "variables": {
+        "vnetName": "[concat('vnet-', uniqueString(resourceGroup().id))]",
+        "subnet1Name": "[concat('subnet-', uniqueString(resourceGroup().id))]",
+        "subnet2Name": "[concat('subnet2-', uniqueString(resourceGroup().id))]",
+        "networkInterfaceName": "[concat('nic-', uniqueString(resourceGroup().id))]",
+        "publicIpAddressName": "[concat('pip-', uniqueString(resourceGroup().id))]",
+        "publicIP1": {
+            "id": "[resourceId('Microsoft.Network/publicIPAddresses', concat(variables('publicIpAddressName'),'-1'))]"
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Network/virtualNetworks",
+            "apiVersion": "2023-09-01",
+            "name": "[variables('vnetName')]",
+            "location": "[parameters('location')]",
+            "tags": {
+                "displayName": "[variables('vnetName')]"
+            },
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "10.0.0.0/16"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('subnet1Name')]",
+                        "properties": {
+                            "addressPrefix": "10.0.0.0/24"
+                        }
+                    },
+                    {
+                        "name": "[variables('subnet2Name')]",
+                        "properties": {
+                            "addressPrefix": "10.0.1.0/24"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "apiVersion": "2023-09-01",
+            "name": "[variables('publicIpAddressName')]",
+            "location": "[parameters('location')]",
+            "tags": {
+                "displayName": "[variables('publicIpAddressName')]"
+            },
+            "condition": "[equals(parameters('networkInterfaceType'), 'Public')]",
+            "properties": {
+                "publicIPAllocationMethod": "Static",
+                "dnsSettings": {
+                    "domainNameLabel": "[variables('publicIpAddressName')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2023-09-01",
+            "name": "[variables('networkInterfaceName')]",
+            "location": "[parameters('location')]",
+            "tags": {
+                "displayName": "[variables('networkInterfaceName')]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIpAddressName'))]",
+                "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "subnet": {
+                                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnet1Name'))]"
+                            },
+                            "privateIPAllocationMethod": "Dynamic",
+                            "publicIPAddress": "[if(equals(parameters('networkInterfaceType'), 'Public'), variables('publicIP1'), json('null'))]"
+                        }
+                    }
+                ]
+            }
+        }
+    ],
+    "outputs": {}
+}
